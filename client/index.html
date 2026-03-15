@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaos Arena</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- JOIN SCREEN -->
+<div id="join-screen">
+    <h1>🥊 Chaos Arena</h1>
+    <input id="input-name"     type="text" placeholder="Your name" maxlength="16" />
+    <input id="input-roomcode" type="text" placeholder="Room code (leave blank to create)" maxlength="4" />
+    <button id="btn-join">Join Game</button>
+    <div id="join-error"></div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen" class="hidden">
+    <div id="hud">
+        <span id="hud-room">Room: --</span>
+        <span id="hud-health">❤️ 100</span>
+        <span id="hud-timer">⏱ 2:00</span>
+        <span id="hud-players">Players: 0</span>
+    </div>
+    <canvas id="game-canvas"></canvas>
+    <div id="reaction-bar">
+        <button class="react-btn" data-emoji="😂">😂</button>
+        <button class="react-btn" data-emoji="🤡">🤡</button>
+        <button class="react-btn" data-emoji="💀">💀</button>
+        <button class="react-btn" data-emoji="🔥">🔥</button>
+    </div>
+    <div id="event-log"></div>
+</div>
+
+<!-- ROUND OVER SCREEN -->
+<div id="roundover-screen" class="hidden">
+    <h2 id="roundover-winner"></h2>
+    <div id="roundover-messages"></div>
+    <p id="roundover-countdown"></p>
+</div>
+
+<script src="network.js"></script>
+<script src="input.js"></script>
+<script src="renderer.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
