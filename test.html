@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chaos Arena Test</title>
+</head>
+<body>
+<h2>Chaos Arena WebSocket Test</h2>
+<div id="log" style="font-family: monospace; white-space: pre;"></div>
+
+<script>
+    function log(msg) {
+      document.getElementById('log').innerText += msg + '\n';
+    }
+
+    const ws = new WebSocket('ws://localhost:8080/ws/game');
+
+    ws.onopen = () => {
+      log('CONNECTED');
+      ws.send(JSON.stringify({ type: 'JOIN_ROOM', name: 'Pluto', roomCode: 'TEST' }));
+    };
+
+    ws.onmessage = e => {
+      log('MSG: ' + JSON.stringify(JSON.parse(e.data), null, 2));
+    };
+
+    ws.onerror = e => log('ERROR: ' + e);
+    ws.onclose = e => log('CLOSED: ' + e.code);
+</script>
+</body>
+</html>
