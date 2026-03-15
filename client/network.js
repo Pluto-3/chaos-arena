@@ -5,23 +5,13 @@ const Network = (() => {
   function connect(onMessage) {
     onMessageCallback = onMessage;
     ws = new WebSocket('ws://localhost:8080/ws/game');
-
-    ws.onopen = () => {
-      console.log('Connected to Chaos Arena server');
-    };
-
+    ws.onopen    = () => console.log('Connected to Chaos Arena server');
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (onMessageCallback) onMessageCallback(data);
     };
-
-    ws.onerror = (e) => {
-      console.error('WebSocket error:', e);
-    };
-
-    ws.onclose = () => {
-      console.log('Disconnected from server');
-    };
+    ws.onerror = (e) => console.error('WebSocket error:', e);
+    ws.onclose = () => console.log('Disconnected from server');
   }
 
   function send(payload) {
@@ -30,29 +20,13 @@ const Network = (() => {
     }
   }
 
-  function join(name, roomCode) {
-    send({ type: 'JOIN_ROOM', name, roomCode });
-  }
+  function join(name, roomCode)          { send({ type: 'JOIN_ROOM', name, roomCode }); }
+  function sendMove(direction)           { send({ type: 'MOVE', direction }); }
+  function sendAttack(targetId)          { send({ type: 'ATTACK', targetId }); }
+  function sendBuild(structureType, x, y){ send({ type: 'BUILD', structureType, x, y }); }
+  function sendTrap(trapType, x, y)      { send({ type: 'PLACE_TRAP', trapType, x, y }); }
+  function sendReaction(emoji)           { send({ type: 'REACTION', emoji }); }
+  function sendWeapon(weapon)            { send({ type: 'SWITCH_WEAPON', weapon }); }
 
-  function sendMove(direction) {
-    send({ type: 'MOVE', direction });
-  }
-
-  function sendAttack(targetId) {
-    send({ type: 'ATTACK', targetId });
-  }
-
-  function sendBuild(structureType, x, y) {
-    send({ type: 'BUILD', structureType, x, y });
-  }
-
-  function sendTrap(trapType, x, y) {
-    send({ type: 'PLACE_TRAP', trapType, x, y });
-  }
-
-  function sendReaction(emoji) {
-    send({ type: 'REACTION', emoji });
-  }
-
-  return { connect, join, sendMove, sendAttack, sendBuild, sendTrap, sendReaction };
+  return { connect, join, sendMove, sendAttack, sendBuild, sendTrap, sendReaction, sendWeapon };
 })();

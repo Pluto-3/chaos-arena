@@ -20,8 +20,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.chaosarena.model.Trap.TrapType;
 import com.chaosarena.model.Structure.StructureType;
 
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+
 import com.chaosarena.model.*;
 import com.chaosarena.room.Room;
 import com.chaosarena.room.RoomManager;
@@ -34,7 +34,6 @@ import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -85,12 +84,22 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 case "BUILD"      -> handleBuild(session, json);
                 case "PLACE_TRAP" -> handlePlaceTrap(session, json);
                 case "REACTION"   -> handleReaction(session, json);
+                case "SWITCH_WEAPON" -> handleSwitchWeapon(session, json);
                 default           -> log.warn("Unknown message type: {}", type);
             }
         } catch (Exception e) {
             log.error("Error handling message: {}", e.getMessage());
             messageSender.sendToSession(session, messageSender.buildError("Invalid message"));
         }
+    }
+
+    private void handleSwitchWeapon(WebSocketSession session, JsonNode json) {
+        withPlayer(session, (room, player) -> {
+            String weapon = json.get("weapon").asText();
+            if (List.of("frying_pan", "fish_slap", "banana_throw").contains(weapon)) {
+                player.setWeapon(weapon);
+            }
+        });
     }
 
     private void handleJoin(WebSocketSession session, JsonNode json) {

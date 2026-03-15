@@ -1,20 +1,24 @@
 const Renderer = (() => {
-  let canvas = null;
-  let ctx = null;
+  let canvas      = null;
+  let ctx         = null;
   let staticWalls = [];
-  let myPlayerId = null;
+  let myPlayerId  = null;
 
-  // Player colours — up to 5 players
   const PLAYER_COLORS = ['#e94560', '#00b4d8', '#06d6a0', '#ffd166', '#c77dff'];
   const playerColorMap = {};
   let colorIndex = 0;
 
+  // Damage flash effect per player
+  const damageFlash = {};
+
+  // Floating text effects
+  const floatingTexts = [];
+
   function init(canvasEl, walls, playerId) {
-    canvas    = canvasEl;
-    ctx       = canvas.getContext('2d');
+    canvas      = canvasEl;
+    ctx         = canvas.getContext('2d');
     staticWalls = walls;
     myPlayerId  = playerId;
-
     canvas.width  = 800;
     canvas.height = 600;
   }
@@ -27,10 +31,17 @@ const Renderer = (() => {
     return playerColorMap[id];
   }
 
+  function flashDamage(playerId) {
+    damageFlash[playerId] = 8; // frames to flash
+  }
+
+  function addFloatingText(x, y, text, color) {
+    floatingTexts.push({ x, y, text, color, life: 60, vy: -1.5 });
+  }
+
   function draw(state) {
     if (!ctx) return;
 
-    // Background
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -38,12 +49,13 @@ const Renderer = (() => {
     drawStructures(state.structures || []);
     drawTraps(state.traps || []);
     drawPlayers(state.players || []);
+    drawFloatingTexts();
   }
 
   function drawStaticWalls() {
-    ctx.fillStyle = '#2a2a4e';
+    ctx.fillStyle   = '#2a2a4e';
     ctx.strokeStyle = '#4a4a6e';
-    ctx.lineWidth = 1;
+    ctx.lineWidth   = 1;
     for (const wall of staticWalls) {
       ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
       ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
@@ -53,20 +65,10 @@ const Renderer = (() => {
   function drawStructures(structures) {
     for (const s of structures) {
       switch (s.type) {
-        case 'WALL':
-          ctx.fillStyle = '#8b5e3c';
-          ctx.strokeStyle = '#a0522d';
-          break;
-        case 'JUMP_PAD':
-          ctx.fillStyle = '#06d6a0';
-          ctx.strokeStyle = '#04a87d';
-          break;
-        case 'TURRET':
-          ctx.fillStyle = '#c77dff';
-          ctx.strokeStyle = '#9b5de5';
-          break;
-        default:
-          ctx.fillStyle = '#888';
+        case 'WALL':     ctx.fillStyle = '#8b5e3c'; ctx.strokeStyle = '#a0522d'; break;
+        case 'JUMP_PAD': ctx.fillStyle = '#06d6a0'; ctx.strokeStyle = '#04a87d'; break;
+        case 'TURRET':   ctx.fillStyle = '#c77dff'; ctx.strokeStyle = '#9b5de5'; break;
+        default:         ctx.fillStyle = '#888';
       }
       ctx.lineWidth = 2;
       ctx.fillRect(s.x, s.y, s.width || 40, s.height || 40);
@@ -86,36 +88,13 @@ const Renderer = (() => {
       if (!trap.active) continue;
       ctx.save();
       ctx.translate(trap.x, trap.y);
-
+      ctx.font = '22px serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
       switch (trap.type) {
-        case 'BANANA':
-          ctx.fillStyle = '#ffd166';
-          ctx.font = '20px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('🍌', 0, 0);
-          break;
-        case 'SPRING':
-          ctx.fillStyle = '#00b4d8';
-          ctx.beginPath();
-          ctx.arc(0, 0, 10, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#fff';
-          ctx.font = '12px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('🌀', 0, 0);
-          break;
-        case 'GLUE':
-          ctx.fillStyle = '#a8dadc';
-          ctx.beginPath();
-          ctx.arc(0, 0, 10, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.font = '12px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('🕸️', 0, 0);
-          break;
+        case 'BANANA': ctx.fillText('🍌', 0, 0); break;
+        case 'SPRING': ctx.fillText('🌀', 0, 0); break;
+        case 'GLUE':   ctx.fillText('🕸️', 0, 0); break;
       }
       ctx.restore();
     }
@@ -123,23 +102,45 @@ const Renderer = (() => {
 
   function drawPlayers(players) {
     for (const player of players) {
-      if (!player.alive) continue;
-
       const color  = getPlayerColor(player.id);
       const isMe   = player.id === myPlayerId;
       const radius = 16;
 
-      // Glue effect — draw sticky ring
+      if (!player.alive) {
+        // Draw ghost / dead player
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle   = color;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.font = '20px serif';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💀', player.x, player.y);
+        ctx.restore();
+        continue;
+      }
+
+      // Glue effect ring
       if (player.glued) {
         ctx.strokeStyle = '#a8dadc';
         ctx.lineWidth   = 3;
         ctx.beginPath();
-        ctx.arc(player.x, player.y, radius + 4, 0, Math.PI * 2);
+        ctx.arc(player.x, player.y, radius + 5, 0, Math.PI * 2);
         ctx.stroke();
       }
 
-      // Player circle
-      ctx.fillStyle   = color;
+      // Damage flash — briefly turn player white
+      const flashing = damageFlash[player.id] > 0;
+      if (flashing) {
+        damageFlash[player.id]--;
+        ctx.fillStyle = '#ffffff';
+      } else {
+        ctx.fillStyle = color;
+      }
+
       ctx.strokeStyle = isMe ? '#fff' : '#000';
       ctx.lineWidth   = isMe ? 3 : 1.5;
       ctx.beginPath();
@@ -147,12 +148,20 @@ const Renderer = (() => {
       ctx.fill();
       ctx.stroke();
 
-      // Name tag
-      ctx.fillStyle   = '#fff';
-      ctx.font        = `bold 11px Segoe UI`;
-      ctx.textAlign   = 'center';
+      // Weapon icon above player
+      ctx.font = '14px serif';
+      ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(player.name, player.x, player.y - radius - 8);
+      const weaponIcon = player.weapon === 'frying_pan' ? '🍳'
+                       : player.weapon === 'fish_slap'  ? '🐟' : '🍌';
+      ctx.fillText(weaponIcon, player.x + radius, player.y - radius);
+
+      // Name tag
+      ctx.fillStyle    = '#fff';
+      ctx.font         = 'bold 11px Segoe UI';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(player.name, player.x, player.y - radius - 10);
 
       // Health bar
       const barWidth = 32;
@@ -164,5 +173,28 @@ const Renderer = (() => {
     }
   }
 
-  return { init, draw, getPlayerColor, getStaticWalls: () => staticWalls };
+  function drawFloatingTexts() {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      const ft = floatingTexts[i];
+      ft.y    += ft.vy;
+      ft.life -= 1;
+      if (ft.life <= 0) { floatingTexts.splice(i, 1); continue; }
+      ctx.globalAlpha  = ft.life / 60;
+      ctx.fillStyle    = ft.color || '#fff';
+      ctx.font         = 'bold 14px Segoe UI';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.globalAlpha  = 1;
+    }
+  }
+
+  return {
+    init,
+    draw,
+    getPlayerColor,
+    getStaticWalls: () => staticWalls,
+    flashDamage,
+    addFloatingText
+  };
 })();

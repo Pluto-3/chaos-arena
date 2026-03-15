@@ -1,15 +1,14 @@
 const Game = (() => {
-  let myPlayerId = null;
-  let gameState  = { players: {}, structures: [], traps: [] };
-  let loopStarted = false;
-
-  // Client prediction — local position for MY player only
+  let myPlayerId     = null;
+  let gameState      = { players: {}, structures: [], traps: [] };
+  let loopStarted    = false;
+  let predictionSeeded = false;
   let localX = 0;
   let localY = 0;
-  let predictionSeeded = false;
+  let lastFrameTime  = 0;
+  let prevHealthMap  = {};
 
-  const SPEED =5.0;
-  let lastFrameTime = performance.now();
+  const SPEED  = 5.0;
   const CANVAS = document.getElementById('game-canvas');
 
   function toArray(players) {
@@ -61,24 +60,39 @@ const Game = (() => {
         break;
 
       case 'STATE_UPDATE':
+        // Detect damage — flash and show floating number
+        const incoming = toArray(msg.players);
+        incoming.forEach(p => {
+          const prev = prevHealthMap[p.id];
+          if (prev !== undefined && p.health < prev) {
+            const dmg = prev - p.health;
+            Renderer.flashDamage(p.id);
+            Renderer.addFloatingText(p.x, p.y - 20, '-' + dmg, '#e94560');
+          }
+          prevHealthMap[p.id] = p.health;
+        });
+
         gameState = msg;
 
-        // Seed local position once on very first update only
         if (!predictionSeeded) {
-          const me = toArray(msg.players).find(p => p.id === myPlayerId);
+          const me = incoming.find(p => p.id === myPlayerId);
           if (me) {
             localX = me.x;
             localY = me.y;
             predictionSeeded = true;
           }
         }
-        // No reconciliation during normal play — local prediction is authoritative
-        // Server position is only used for OTHER players
 
         updateHUD(msg);
         break;
 
       case 'PLAYER_DEAD':
+        logEvent(msg.message);
+        // Show big floating skull at dead player position
+        const dead = toArray(gameState.players).find(p => p.id === msg.entityId);
+        if (dead) Renderer.addFloatingText(dead.x, dead.y - 30, '💀 DEAD', '#e94560');
+        break;
+
       case 'TRAP_TRIGGERED':
         logEvent(msg.message);
         break;
@@ -93,6 +107,7 @@ const Game = (() => {
 
       case 'ROUND_START':
         predictionSeeded = false;
+        prevHealthMap    = {};
         showScreen('game');
         break;
     }
@@ -100,52 +115,47 @@ const Game = (() => {
 
   // ── Prediction ────────────────────────────────────────────────────
   function applyLocalPrediction(dir) {
-      if (!predictionSeeded) return;
+    if (!predictionSeeded) return;
 
-      // Delta time scaling — match server's 50ms tick
-      const now = performance.now();
-      const delta = Math.min(now - lastFrameTime, 100); // cap at 100ms
-      lastFrameTime = now;
-      const scale = delta / 50; // 50ms = one server tick
+    const now   = performance.now();
+    const delta = Math.min(now - lastFrameTime, 100);
+    lastFrameTime = now;
+    const scale = delta / 50;
+    const spd   = SPEED * scale;
 
-      const spd = SPEED * scale;
-
-      let dx = 0, dy = 0;
-      switch (dir) {
-        case 'UP':         dy = -spd; break;
-        case 'DOWN':       dy =  spd; break;
-        case 'LEFT':       dx = -spd; break;
-        case 'RIGHT':      dx =  spd; break;
-        case 'UP_LEFT':    dx = -spd * 0.707; dy = -spd * 0.707; break;
-        case 'UP_RIGHT':   dx =  spd * 0.707; dy = -spd * 0.707; break;
-        case 'DOWN_LEFT':  dx = -spd * 0.707; dy =  spd * 0.707; break;
-        case 'DOWN_RIGHT': dx =  spd * 0.707; dy =  spd * 0.707; break;
-        default: return;
-      }
-
-      const newX = localX + dx;
-      const newY = localY + dy;
-
-      // Wall collision — check X and Y axes separately so you slide along walls
-      if (!collidesWithWalls(newX, localY)) localX = newX;
-      if (!collidesWithWalls(localX, newY)) localY = newY;
-
-      localX = Math.max(56, Math.min(744, localX));
-      localY = Math.max(56, Math.min(544, localY));
+    let dx = 0, dy = 0;
+    switch (dir) {
+      case 'UP':         dy = -spd; break;
+      case 'DOWN':       dy =  spd; break;
+      case 'LEFT':       dx = -spd; break;
+      case 'RIGHT':      dx =  spd; break;
+      case 'UP_LEFT':    dx = -spd * 0.707; dy = -spd * 0.707; break;
+      case 'UP_RIGHT':   dx =  spd * 0.707; dy = -spd * 0.707; break;
+      case 'DOWN_LEFT':  dx = -spd * 0.707; dy =  spd * 0.707; break;
+      case 'DOWN_RIGHT': dx =  spd * 0.707; dy =  spd * 0.707; break;
+      default: return;
     }
+
+    const newX = localX + dx;
+    const newY = localY + dy;
+    if (!collidesWithWalls(newX, localY)) localX = newX;
+    if (!collidesWithWalls(localX, newY)) localY = newY;
+
+    localX = Math.max(56, Math.min(744, localX));
+    localY = Math.max(56, Math.min(544, localY));
+  }
 
   function collidesWithWalls(x, y) {
-      const radius = 16;
-      const walls = Renderer.getStaticWalls();
-      for (const w of walls) {
-        const closestX = Math.max(w.x, Math.min(x, w.x + w.width));
-        const closestY = Math.max(w.y, Math.min(y, w.y + w.height));
-        const dx = x - closestX;
-        const dy = y - closestY;
-        if ((dx * dx + dy * dy) <= (radius * radius)) return true;
-      }
-      return false;
+    const radius = 16;
+    for (const w of Renderer.getStaticWalls()) {
+      const cx = Math.max(w.x, Math.min(x, w.x + w.width));
+      const cy = Math.max(w.y, Math.min(y, w.y + w.height));
+      const dx = x - cx;
+      const dy = y - cy;
+      if ((dx * dx + dy * dy) <= (radius * radius)) return true;
     }
+    return false;
+  }
 
   // ── Attack ────────────────────────────────────────────────────────
   function attackNearest() {
@@ -162,36 +172,44 @@ const Game = (() => {
     if (nearest && minDist <= 80) Network.sendAttack(nearest.id);
   }
 
+  // ── Trap placement ────────────────────────────────────────────────
+  function placeTrap(trapType) {
+    Network.sendTrap(trapType, localX, localY);
+    logEvent('You placed a ' + trapType.toLowerCase() + ' trap 🪤');
+  }
+
+  // ── Weapon switch ─────────────────────────────────────────────────
+  function switchWeapon(weapon) {
+    Network.sendWeapon(weapon);
+    const icons = { frying_pan: '🍳', fish_slap: '🐟', banana_throw: '🍌' };
+    logEvent('Switched to ' + weapon.replace('_', ' ') + ' ' + (icons[weapon] || ''));
+  }
+
   // ── Game loop ─────────────────────────────────────────────────────
   function startGameLoop() {
-      if (loopStarted) return;
-      loopStarted = true;
-      Input.init(attackNearest);
+    if (loopStarted) return;
+    loopStarted = true;
+    Input.init(attackNearest, placeTrap, switchWeapon);
+    lastFrameTime = performance.now();
 
-      function loop() {
-        // Poll input and send to server
-        Input.pollAndSend();
+    function loop() {
+      Input.pollAndSend();
+      const dir = Input.getDirection();
+      applyLocalPrediction(dir);
 
-        // Always get current direction for local prediction
-        const dir = Input.getDirection();
-        applyLocalPrediction(dir);
+      const renderState = {
+        ...gameState,
+        players: toArray(gameState.players).map(p =>
+          p.id === myPlayerId ? { ...p, x: localX, y: localY } : p
+        )
+      };
 
-        // Build render state
-        const renderState = {
-          ...gameState,
-          players: toArray(gameState.players).map(p =>
-            p.id === myPlayerId
-              ? { ...p, x: localX, y: localY }  // always use predicted pos for self
-              : p                                 // use server pos for others
-          )
-        };
-
-        Renderer.draw(renderState);
-        requestAnimationFrame(loop);
-      }
-
-      loop();
+      Renderer.draw(renderState);
+      requestAnimationFrame(loop);
     }
+
+    loop();
+  }
 
   // ── HUD ───────────────────────────────────────────────────────────
   function updateHUD(state) {
@@ -208,7 +226,7 @@ const Game = (() => {
   // ── Event log ─────────────────────────────────────────────────────
   function logEvent(msg) {
     const el = document.createElement('div');
-    el.className = 'event-entry';
+    el.className   = 'event-entry';
     el.textContent = msg;
     eventLog.appendChild(el);
     setTimeout(() => el.remove(), 4000);

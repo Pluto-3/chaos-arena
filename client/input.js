@@ -1,21 +1,36 @@
 const Input = (() => {
   const keys = {};
   let lastDirection = 'NONE';
-  let onAttackCallback = null;
+  let onAttackCallback   = null;
+  let onTrapCallback     = null;
+  let onWeaponCallback   = null;
 
   const MOVE_KEYS = [
-    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-    'KeyW','KeyA','KeyS','KeyD','Space'
+    'KeyW','KeyA','KeyS','KeyD','Space',
+    'KeyQ','KeyE','KeyR',
+    'Digit1','Digit2','Digit3'
   ];
 
-  function init(onAttack) {
+  function init(onAttack, onTrap, onWeapon) {
     onAttackCallback = onAttack;
+    onTrapCallback   = onTrap;
+    onWeaponCallback = onWeapon;
 
     window.addEventListener('keydown', (e) => {
-      // Prevent arrow keys from scrolling or moving browser focus
       if (MOVE_KEYS.includes(e.code)) e.preventDefault();
       keys[e.code] = true;
+
       if (e.code === 'Space' && onAttackCallback) onAttackCallback();
+
+      // Trap placement
+      if (e.code === 'KeyQ' && onTrapCallback) onTrapCallback('BANANA');
+      if (e.code === 'KeyE' && onTrapCallback) onTrapCallback('SPRING');
+      if (e.code === 'KeyR' && onTrapCallback) onTrapCallback('GLUE');
+
+      // Weapon switch
+      if (e.code === 'Digit1' && onWeaponCallback) onWeaponCallback('frying_pan');
+      if (e.code === 'Digit2' && onWeaponCallback) onWeaponCallback('fish_slap');
+      if (e.code === 'Digit3' && onWeaponCallback) onWeaponCallback('banana_throw');
     });
 
     window.addEventListener('keyup', (e) => {
